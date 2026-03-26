@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "outDir": "./dist",
+    "lib": ["ES2021", "DOM"]
+  },
+  "include": ["convex/**/*"],
+  "exclude": ["node_modules"]
+}

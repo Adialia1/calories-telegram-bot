@@ -1,0 +1,17 @@
+{
+  "name": "calorie-bot",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx convex dev",
+    "deploy": "npx convex deploy"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "3.0.48",
+    "@convex-dev/agent": "0.6.1",
+    "ai": "6.0.138",
+    "convex": "1.34.0",
+    "convex-helpers": "0.1.114",
+    "zod": "4.3.6"
+  }
+}
