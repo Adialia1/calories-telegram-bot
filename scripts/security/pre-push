@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Git pre-push hook: blocks pushing infected code, or commits carrying the injector's fingerprint.
+# Install once per clone with: bash scripts/security/install-hooks.sh
+# Emergency bypass (only if you are sure): git push --no-verify
+set -uo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+zero=0000000000000000000000000000000000000000
+status=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue                         # branch deletion
+  bash "$root/scripts/security/malware-scan.sh" --rev "$local_sha" >/dev/null || {
+    echo "pre-push: refusing to push $local_ref; the code contains malware signatures." >&2
+    bash "$root/scripts/security/malware-scan.sh" --rev "$local_sha" >/dev/null
+    status=1; continue; }
+  if [ "$remote_sha" = "$zero" ]; then range=("$local_sha" --not --remotes); else range=("$remote_sha..$local_sha"); fi
+  # injector fingerprint: committed from a -07:00/-08:00 host whose offset differs from the author's
+  bad="$(git log --format='%h|%aI|%cI|%cn|%s' "${range[@]}" | perl -F'\|' -lane '
+    my ($a, $c) = (substr($F[1], -6), substr($F[2], -6));
+    print "  $F[0] committed by \"$F[3]\" at $F[2] (author $F[1]): $F[4]" if $c =~ /^-0[78]:00$/ && $a ne $c;')"
+  if [ -n "$bad" ]; then
+    echo "pre-push: refusing to push $local_ref; these commits look like the 2026 injector's rewrites:" >&2
+    echo "$bad" >&2
+    status=1
+  fi
+done
+
+[ "$status" = 0 ] || echo "See CLAUDE.md, \"Security incident\". Bypass only if certain: git push --no-verify" >&2
+exit "$status"

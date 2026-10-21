@@ -3,41 +3,40 @@
 <!-- security-incident:start -->
 ## Security incident: EtherHiding malware injection (2026-09 and 2026-10)
 
-This repo was hit twice by a build-time malware injector pushed with a stolen GitHub credential:
-first on 2026-09-01, then on 2026-10-19 to 2026-10-21. Both waves were cleaned with forward commits, the last on 2026-10-21.
+This repo was hit twice by a build-time malware injector pushed with a stolen GitHub login: first on 2026-09-01,
+then on 2026-10-19 to 2026-10-21. Both waves were cleaned on 2026-10-21. The pusher ran on a **Windows machine**
+(it hid `temp_auto_push.bat`, `temp_interactive_push.bat` and `config.bat` via `.gitignore`).
 **Git history still contains the payloads**, so checking out, merging, rebasing or cherry-picking a commit from
-before the cleanup brings them back. Never build or run an old commit or branch without scanning it first.
+before the cleanup brings them back.
 
-**Before any `npm install`, `npm test`, `vitest`, `next build`, `dev` or deploy, run this. Any output means infected: stop.**
+### Rules for agents and humans
+1. **Before any `install`, `build`, `test`, `dev`, deploy or push, run the scan. A non-zero exit means infected:
+   stop and tell the owner immediately. Do not build, do not "fix it quietly".**
+   ```bash
+   bash scripts/security/malware-scan.sh
+   ```
+2. Once per clone, install the pre-push hook (it scans what you push and rejects injector-fingerprinted commits):
+   ```bash
+   bash scripts/security/install-hooks.sh
+   ```
+3. The `malware-scan` GitHub Actions check runs on every push and pull request. Never merge while it is red.
+4. Never edit or delete anything in `scripts/security/` or `.github/workflows/malware-scan.yml` to make a check pass.
+5. Do not use `git push --no-verify` unless the owner explicitly asks.
 
-```bash
-git grep -nIP '[ 	]{200,}[^ 	
-].{999,}' -- . ':!*.md' ':!*.map' | cut -c1-120   # payload hidden off-screen
-git grep -nI 'folderOpen' -- '*tasks.json'                                             # VS Code autorun task
-git grep -nI 'allowAutomaticTasks' -- '*settings.json'
-git grep -nIE '"node [^"]*api\.js' -- '*package.json'                                   # script hook
-git grep -nIE '="?aHR0c' -- '*.env' '.env*'                                             # base64 C2 URL
-git grep -nIE 'atob\(process\.env' -- . ':!*.md'                                       # fetch+eval C2 loader
-```
+### What the injection looks like (any one of these)
+- A 13-26KB obfuscated line appended after hundreds of spaces to a `postcss`/`eslint`/`babel`/`tailwind`/`jest`
+  config, often with a `createRequire` shim prepended.
+- A root `api.js` that is all obfuscated code, plus `package.json` scripts rewritten to `node api.js && ...`.
+- `.vscode/tasks.json` with a hidden `runOn: folderOpen` task running a fake font
+  (`public/fonts/fa-solid-500.woff2`, `fa-solid.lkf`, `fa-brand-400.woff`) that is really JavaScript, plus
+  `task.allowAutomaticTasks: true` in `.vscode/settings.json` and a decoy Font Awesome folder.
+- `next.config.ts` (or a script) gaining an `(async () => { atob(process.env.AUTH_API_KEY) ... eval(...) })()`
+  block, with `"dotenv": "^8.2.0"` / `"node-fetch": "^3.3.2"` added to `package.json`.
+- A `.env` with `AUTH_API_KEY="aHR0c..."` (base64 of the C2 `https://auth-confirm-eight.vercel.app/api`).
+- A committed `branch_structure.json` (the injector's branch map) and `.gitignore` entries removed or added.
 
-What the injection looks like (any one of these):
-- A ~13-26KB obfuscated line appended after hundreds of spaces to `postcss`/`eslint`/`babel`/`tailwind`/`jest` configs,
-  often with a `createRequire` shim prepended.
-- A root `api.js` that is entirely obfuscated code, plus `package.json` scripts rewritten to `node api.js && ...`.
-- `.vscode/tasks.json` with a hidden `runOn: folderOpen` task running `node ./public/fonts/fa-solid-500.woff2`
-  (or `fa-solid.lkf`, `fa-brand-400.woff`): a fake font that is really JS. Decoy real Font Awesome files sit next to it.
-- `.vscode/settings.json` gaining `task.allowAutomaticTasks: true`, `debug.openDebug: neverOpen`,
-  `terminal.integrated.hideOnStartup`.
-- `next.config.ts` (or a script) gaining an `(async () => { ... atob(process.env.AUTH_API_KEY) ... eval(...) })()` block
-  that downloads and runs code at build time, plus `"dotenv": "^8.2.0"` / `"node-fetch": "^3.3.2"` added to `package.json`.
-- A `.env` with `AUTH_API_KEY="aHR0c..."` (base64 of the C2 `https://auth-confirm-eight.vercel.app/api`), and
-  `.gitignore` entries for `.env`/build output deleted.
-
-Telling injector commits apart: they keep the real author line but are **committed by "Adi"** (not "Adi Alia")
-with a `-07:00`/`-08:00` offset, and commit messages often copy earlier genuine "security: remove ..." commits.
-Dates are faked, so use `git log --format='%aI %cI %an %cn %ce'`, not the GitHub UI, which normalizes offsets.
-
-If you find it: do not build. Remove the payload (truncate at the whitespace run, delete the pure-payload files,
-undo the script hook and VS Code settings), re-run the checks above, and tell the owner immediately: it means the
-credential is live again. Check for a running beacon with `ps -axo pid,command | grep -E "node +-e"`.
+### Spotting injector commits
+They keep the real author line but are **committed from a `-07:00`/`-08:00` host whose offset differs from the
+author's**, usually by a shortened name ("Adi" instead of "Adi Alia"), and often copy earlier genuine
+"security: remove ..." messages. Dates are faked; check with `git log --format='%aI %cI %an %cn %ce'`, not the GitHub UI.
 <!-- security-incident:end -->
