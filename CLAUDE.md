@@ -11,11 +11,13 @@ before the cleanup brings them back. Never build or run an old commit or branch 
 **Before any `npm install`, `npm test`, `vitest`, `next build`, `dev` or deploy, run this. Any output means infected: stop.**
 
 ```bash
-git grep -nIP '[ \t]{200,}[^ \t\r\n].{999,}' -- . ':!*.md' ':!*.map' | cut -c1-120   # payload hidden off-screen
+git grep -nIP '[ 	]{200,}[^ 	
+].{999,}' -- . ':!*.md' ':!*.map' | cut -c1-120   # payload hidden off-screen
 git grep -nI 'folderOpen' -- '*tasks.json'                                             # VS Code autorun task
 git grep -nI 'allowAutomaticTasks' -- '*settings.json'
 git grep -nIE '"node [^"]*api\.js' -- '*package.json'                                   # script hook
 git grep -nIE '="?aHR0c' -- '*.env' '.env*'                                             # base64 C2 URL
+git grep -nIE 'atob\(process\.env' -- . ':!*.md'                                       # fetch+eval C2 loader
 ```
 
 What the injection looks like (any one of these):
@@ -26,6 +28,8 @@ What the injection looks like (any one of these):
   (or `fa-solid.lkf`, `fa-brand-400.woff`): a fake font that is really JS. Decoy real Font Awesome files sit next to it.
 - `.vscode/settings.json` gaining `task.allowAutomaticTasks: true`, `debug.openDebug: neverOpen`,
   `terminal.integrated.hideOnStartup`.
+- `next.config.ts` (or a script) gaining an `(async () => { ... atob(process.env.AUTH_API_KEY) ... eval(...) })()` block
+  that downloads and runs code at build time, plus `"dotenv": "^8.2.0"` / `"node-fetch": "^3.3.2"` added to `package.json`.
 - A `.env` with `AUTH_API_KEY="aHR0c..."` (base64 of the C2 `https://auth-confirm-eight.vercel.app/api`), and
   `.gitignore` entries for `.env`/build output deleted.
 
