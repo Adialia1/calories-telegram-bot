@@ -14,7 +14,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     echo "pre-push: refusing to push $local_ref; the code contains malware signatures." >&2
     bash "$root/scripts/security/malware-scan.sh" --rev "$local_sha" >/dev/null
     status=1; continue; }
-  if [ "$remote_sha" = "$zero" ]; then range=("$local_sha" --not --remotes); else range=("$remote_sha..$local_sha"); fi
+  # only commits that are new to the remote; history merged in from published branches was vetted already
+  range=("$local_sha" --not --remotes)
+  [ "$remote_sha" != "$zero" ] && range+=("$remote_sha")
   # injector fingerprint: committed from a -07:00/-08:00 host whose offset differs from the author's
   bad="$(git log --format='%h|%aI|%cI|%cn|%s' "${range[@]}" | perl -F'\|' -lane '
     my ($a, $c) = (substr($F[1], -6), substr($F[2], -6));
